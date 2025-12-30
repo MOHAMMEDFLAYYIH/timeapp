@@ -1,64 +1,23 @@
-import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 import 'category_model.dart';
-import '../app_theme.dart';
+import '../database/database_helper.dart';
 
-/// Repository for Category data access using Hive
+/// Repository for Category data access using SQLite
 class CategoryRepository {
-  late Box<Category> _categoryBox;
+  final DatabaseHelper _db = DatabaseHelper.instance;
   final Uuid _uuid = const Uuid();
 
   /// Initialize the category repository
+  /// Default categories are seeded in DatabaseHelper._createDb
   Future<void> init() async {
-    _categoryBox = await Hive.openBox<Category>(
-      DatabaseConstants.categoriesBox,
-    );
-
-    // Seed default categories if box is empty
-    if (_categoryBox.isEmpty) {
-      await _seedDefaultCategories();
-    }
-  }
-
-  /// Seed default categories on first run
-  Future<void> _seedDefaultCategories() async {
-    final defaultCategories = [
-      Category(
-        id: _uuid.v4(),
-        name: 'Work',
-        colorValue: 0xFF2563EB,
-        iconCode: Icons.work_outline.codePoint,
-      ),
-      Category(
-        id: _uuid.v4(),
-        name: 'Personal',
-        colorValue: 0xFF7C3AED,
-        iconCode: Icons.person_outline.codePoint,
-      ),
-      Category(
-        id: _uuid.v4(),
-        name: 'Shopping',
-        colorValue: 0xFF10B981,
-        iconCode: Icons.shopping_cart_outlined.codePoint,
-      ),
-      Category(
-        id: _uuid.v4(),
-        name: 'Health',
-        colorValue: 0xFFEF4444,
-        iconCode: Icons.favorite_border.codePoint,
-      ),
-    ];
-
-    for (final category in defaultCategories) {
-      await _categoryBox.put(category.id, category);
-    }
+    // Trigger database initialization by accessing it
+    await _db.database;
   }
 
   /// Get all categories from storage
   Future<List<Category>> getAllCategories() async {
     try {
-      return _categoryBox.values.toList();
+      return await _db.getCategories();
     } catch (e) {
       throw Exception('Failed to load categories: $e');
     }
@@ -67,7 +26,7 @@ class CategoryRepository {
   /// Get a single category by ID
   Future<Category?> getCategoryById(String id) async {
     try {
-      return _categoryBox.get(id);
+      return await _db.getCategoryById(id);
     } catch (e) {
       throw Exception('Failed to get category: $e');
     }
@@ -80,7 +39,7 @@ class CategoryRepository {
           ? category.copyWith(id: _uuid.v4())
           : category;
 
-      await _categoryBox.put(categoryWithId.id, categoryWithId);
+      await _db.insertCategory(categoryWithId);
       return categoryWithId;
     } catch (e) {
       throw Exception('Failed to add category: $e');
@@ -90,11 +49,12 @@ class CategoryRepository {
   /// Update an existing category
   Future<Category> updateCategory(Category category) async {
     try {
-      if (!_categoryBox.containsKey(category.id)) {
+      final exists = await _db.categoryExists(category.id);
+      if (!exists) {
         throw Exception('Category with ID ${category.id} not found');
       }
 
-      await _categoryBox.put(category.id, category);
+      await _db.updateCategory(category);
       return category;
     } catch (e) {
       throw Exception('Failed to update category: $e');
@@ -104,11 +64,12 @@ class CategoryRepository {
   /// Delete a category by ID
   Future<void> deleteCategory(String id) async {
     try {
-      if (!_categoryBox.containsKey(id)) {
+      final exists = await _db.categoryExists(id);
+      if (!exists) {
         throw Exception('Category with ID $id not found');
       }
 
-      await _categoryBox.delete(id);
+      await _db.deleteCategory(id);
     } catch (e) {
       throw Exception('Failed to delete category: $e');
     }
@@ -117,7 +78,8 @@ class CategoryRepository {
   /// Check if a category name already exists
   Future<bool> categoryNameExists(String name, {String? excludeId}) async {
     try {
-      return _categoryBox.values.any(
+      final categories = await _db.getCategories();
+      return categories.any(
         (category) =>
             category.name.toLowerCase() == name.toLowerCase() &&
             category.id != excludeId,
@@ -130,7 +92,8 @@ class CategoryRepository {
   /// Get category count
   Future<int> getCategoryCount() async {
     try {
-      return _categoryBox.length;
+      final categories = await _db.getCategories();
+      return categories.length;
     } catch (e) {
       throw Exception('Failed to get category count: $e');
     }
@@ -139,7 +102,10 @@ class CategoryRepository {
   /// Delete all categories
   Future<void> deleteAllCategories() async {
     try {
-      await _categoryBox.clear();
+      final categories = await _db.getCategories();
+      for (final category in categories) {
+        await _db.deleteCategory(category.id);
+      }
     } catch (e) {
       throw Exception('Failed to delete all categories: $e');
     }
@@ -147,6 +113,6 @@ class CategoryRepository {
 
   /// Close the repository
   Future<void> close() async {
-    await _categoryBox.close();
+    await _db.close();
   }
 }

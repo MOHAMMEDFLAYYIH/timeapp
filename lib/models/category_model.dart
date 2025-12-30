@@ -1,20 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
 
-part 'category_model.g.dart';
-
-@HiveType(typeId: 1)
+/// Category model representing a task category
+///
+/// This is a plain Dart class used for SQLite persistence.
+/// Use [toMap] to convert for database storage and
+/// [fromMap] factory constructor to create from database data.
 class Category {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final int colorValue;
-
-  @HiveField(3)
   final int iconCode;
 
   Category({
@@ -41,6 +35,7 @@ class Category {
     );
   }
 
+  /// Convert to Map for SQLite storage
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -50,6 +45,7 @@ class Category {
     };
   }
 
+  /// Create Category from SQLite Map data
   factory Category.fromMap(Map<String, dynamic> map) {
     return Category(
       id: map['id'] as String,

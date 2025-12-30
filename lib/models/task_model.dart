@@ -1,32 +1,19 @@
-import 'package:hive/hive.dart';
-
-part 'task_model.g.dart';
-
-@HiveType(typeId: 0)
+/// Task model representing a to-do item
+///
+/// This is a plain Dart class used for SQLite persistence.
+/// Use [toMap] to convert for database storage and
+/// [fromMap] factory constructor to create from database data.
 class Task {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String title;
-
-  @HiveField(2)
   final String? description;
-
-  @HiveField(3)
   final String categoryId;
-
-  @HiveField(4)
   final bool isCompleted;
-
-  @HiveField(5)
   final DateTime createdAt;
-
-  @HiveField(6)
   final DateTime? completedAt;
-
-  @HiveField(7)
   final DateTime? dueDate;
+  final DateTime? remindAt;
+  final bool hasReminder;
 
   Task({
     required this.id,
@@ -37,6 +24,8 @@ class Task {
     required this.createdAt,
     this.completedAt,
     this.dueDate,
+    this.remindAt,
+    this.hasReminder = false,
   });
 
   Task copyWith({
@@ -49,6 +38,9 @@ class Task {
     DateTime? completedAt,
     bool clearCompletedAt = false,
     DateTime? dueDate,
+    DateTime? remindAt,
+    bool? hasReminder,
+    bool clearRemindAt = false,
   }) {
     return Task(
       id: id ?? this.id,
@@ -59,9 +51,14 @@ class Task {
       createdAt: createdAt ?? this.createdAt,
       completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
       dueDate: dueDate ?? this.dueDate,
+      remindAt: clearRemindAt ? null : (remindAt ?? this.remindAt),
+      hasReminder: hasReminder ?? this.hasReminder,
     );
   }
 
+  /// Convert to Map for SQLite storage
+  /// Booleans are converted to 0/1
+  /// DateTime values are converted to ISO 8601 strings
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -69,12 +66,17 @@ class Task {
       'description': description,
       'categoryId': categoryId,
       'isCompleted': isCompleted ? 1 : 0,
-      'createdAt': createdAt.millisecondsSinceEpoch,
-      'completedAt': completedAt?.millisecondsSinceEpoch,
-      'dueDate': dueDate?.millisecondsSinceEpoch,
+      'createdAt': createdAt.toIso8601String(),
+      'completedAt': completedAt?.toIso8601String(),
+      'dueDate': dueDate?.toIso8601String(),
+      'remindAt': remindAt?.toIso8601String(),
+      'hasReminder': hasReminder ? 1 : 0,
     };
   }
 
+  /// Create Task from SQLite Map data
+  /// Parses integers as booleans (0/1)
+  /// Parses ISO 8601 strings as DateTime
   factory Task.fromMap(Map<String, dynamic> map) {
     return Task(
       id: map['id'] as String,
@@ -82,13 +84,17 @@ class Task {
       description: map['description'] as String?,
       categoryId: map['categoryId'] as String,
       isCompleted: (map['isCompleted'] as int) == 1,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt'] as int),
+      createdAt: DateTime.parse(map['createdAt'] as String),
       completedAt: map['completedAt'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(map['completedAt'] as int)
+          ? DateTime.parse(map['completedAt'] as String)
           : null,
       dueDate: map['dueDate'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(map['dueDate'] as int)
+          ? DateTime.parse(map['dueDate'] as String)
           : null,
+      remindAt: map['remindAt'] != null
+          ? DateTime.parse(map['remindAt'] as String)
+          : null,
+      hasReminder: (map['hasReminder'] as int?) == 1,
     );
   }
 }

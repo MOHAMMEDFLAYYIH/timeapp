@@ -112,7 +112,7 @@ class ColorUtils {
 
   /// Convert Color to int for storage
   static int colorToInt(Color color) {
-    return color.value;
+    return color.toARGB32();
   }
 
   /// Convert int to Color

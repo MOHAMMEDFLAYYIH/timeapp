@@ -1,10 +1,16 @@
 // Basic Flutter widget test for Task Manager App
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:task_manager/main.dart';
 
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite/sqflite.dart';
+
 void main() {
+  // Initialize sqflite for test environment
+  sqfliteFfiInit();
+  databaseFactory = databaseFactoryFfi;
+
   testWidgets('App launches successfully', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const TaskManagerApp());

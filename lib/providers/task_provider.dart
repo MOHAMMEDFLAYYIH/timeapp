@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/task_model.dart';
 import '../models/task_repository.dart';
+import '../services/notification_service.dart';
 
 /// TaskProvider manages task state using Provider pattern
 ///
@@ -83,11 +84,26 @@ class TaskProvider with ChangeNotifier {
         return b.createdAt.compareTo(a.createdAt);
       });
 
+      // Reschedule all active reminders on app start
+      await _rescheduleAllReminders();
+
       notifyListeners();
     } catch (e) {
       _setError('Failed to load tasks: $e');
     } finally {
       _setLoading(false);
+    }
+  }
+
+  /// Reschedule all pending reminders (called on app start)
+  Future<void> _rescheduleAllReminders() async {
+    for (final task in _tasks) {
+      if (task.hasReminder && !task.isCompleted && task.remindAt != null) {
+        // Only schedule if reminder time is in the future
+        if (task.remindAt!.isAfter(DateTime.now())) {
+          await NotificationService.instance.scheduleTaskReminder(task);
+        }
+      }
     }
   }
 
@@ -163,6 +179,12 @@ class TaskProvider with ChangeNotifier {
       if (index != -1) {
         _tasks[index] = updatedTask;
         _sortTasks();
+
+        // Cancel reminder if task is now completed
+        if (updatedTask.isCompleted && updatedTask.hasReminder) {
+          await NotificationService.instance.cancelTaskReminder(id);
+        }
+
         notifyListeners();
         return true;
       }

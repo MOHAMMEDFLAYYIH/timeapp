@@ -70,6 +70,17 @@ class TaskTile extends StatelessWidget {
                         Row(
                           children: [
                             Expanded(child: _buildTitle(theme, isCompleted)),
+                            if (task.hasReminder)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  right: AppSpacing.xs,
+                                ),
+                                child: Icon(
+                                  Icons.notifications_active,
+                                  size: 16,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
                             if (task.dueDate != null) _buildDueDateBadge(theme),
                           ],
                         ),

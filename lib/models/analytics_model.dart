@@ -31,7 +31,7 @@ class CategoryStat {
   @override
   String toString() {
     return 'CategoryStat(category: ${category.name}, total: $totalTasks, '
-        'completed: $completedTasks, rate: ${completionPercentage}%)';
+        'completed: $completedTasks, rate: $completionPercentage%)';
   }
 }
 
@@ -122,7 +122,7 @@ class Analytics {
   @override
   String toString() {
     return 'Analytics(total: $totalTasks, completed: $completedTasks, '
-        'rate: ${completionPercentage}%, today: $completedToday, '
+        'rate: $completionPercentage%, today: $completedToday, '
         'thisWeek: $completedThisWeek)';
   }
 }

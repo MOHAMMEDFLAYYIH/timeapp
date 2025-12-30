@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import '../app_theme.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart' as path_lib;
 
-/// Settings Provider for managing app settings
+/// Settings Provider for managing app settings using SQLite
 class SettingsProvider extends ChangeNotifier {
-  late Box _settingsBox;
+  Database? _db;
 
   // Settings state
   Locale _locale = const Locale('en');
@@ -21,25 +21,70 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   Future<void> _initSettings() async {
-    _settingsBox = await Hive.openBox(DatabaseConstants.settingsBox);
-    _loadSettings();
+    final dbPath = await getDatabasesPath();
+    final settingsPath = path_lib.join(dbPath, 'settings.db');
+
+    _db = await openDatabase(
+      settingsPath,
+      version: 1,
+      onCreate: (db, version) async {
+        await db.execute('''
+          CREATE TABLE settings(
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+          )
+        ''');
+      },
+    );
+
+    await _loadSettings();
   }
 
-  void _loadSettings() {
-    final langCode = _settingsBox.get('languageCode', defaultValue: 'en');
-    _locale = Locale(langCode);
-    _userName = _settingsBox.get('userName', defaultValue: 'User Name');
-    _userEmail = _settingsBox.get(
-      'userEmail',
-      defaultValue: 'user@example.com',
+  Future<void> _loadSettings() async {
+    if (_db == null) return;
+
+    final langResult = await _db!.query(
+      'settings',
+      where: 'key = ?',
+      whereArgs: ['languageCode'],
     );
+    if (langResult.isNotEmpty) {
+      _locale = Locale(langResult.first['value'] as String);
+    }
+
+    final nameResult = await _db!.query(
+      'settings',
+      where: 'key = ?',
+      whereArgs: ['userName'],
+    );
+    if (nameResult.isNotEmpty) {
+      _userName = nameResult.first['value'] as String;
+    }
+
+    final emailResult = await _db!.query(
+      'settings',
+      where: 'key = ?',
+      whereArgs: ['userEmail'],
+    );
+    if (emailResult.isNotEmpty) {
+      _userEmail = emailResult.first['value'] as String;
+    }
+
     notifyListeners();
+  }
+
+  Future<void> _saveSetting(String key, String value) async {
+    if (_db == null) return;
+    await _db!.insert('settings', {
+      'key': key,
+      'value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   // Set language
   Future<void> setLanguage(Locale locale) async {
     _locale = locale;
-    await _settingsBox.put('languageCode', locale.languageCode);
+    await _saveSetting('languageCode', locale.languageCode);
     notifyListeners();
   }
 
@@ -47,11 +92,11 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> updateProfile({String? name, String? email}) async {
     if (name != null) {
       _userName = name;
-      await _settingsBox.put('userName', name);
+      await _saveSetting('userName', name);
     }
     if (email != null) {
       _userEmail = email;
-      await _settingsBox.put('userEmail', email);
+      await _saveSetting('userEmail', email);
     }
     notifyListeners();
   }

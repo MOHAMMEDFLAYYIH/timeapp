@@ -8,6 +8,7 @@ import '../providers/task_provider.dart';
 import '../providers/category_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/empty_state.dart';
+import '../services/notification_service.dart';
 
 /// Add/Edit Task Screen with premium design
 class AddEditTaskScreen extends StatefulWidget {
@@ -26,6 +27,8 @@ class _AddEditTaskScreenState extends State<AddEditTaskScreen> {
 
   String? _selectedCategoryId;
   DateTime? _dueDate;
+  DateTime? _remindAt;
+  bool _hasReminder = false;
   bool _isLoading = false;
   Task? _existingTask;
 
@@ -57,6 +60,8 @@ class _AddEditTaskScreenState extends State<AddEditTaskScreen> {
         _descriptionController.text = task.description ?? '';
         _selectedCategoryId = task.categoryId;
         _dueDate = task.dueDate;
+        _remindAt = task.remindAt;
+        _hasReminder = task.hasReminder;
       }
     }
   }
@@ -81,35 +86,53 @@ class _AddEditTaskScreenState extends State<AddEditTaskScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          children: [
-            // Title Field
-            _buildTitleField(theme, loc),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isWideScreen = constraints.maxWidth >= AppBreakpoints.mobile;
 
-            const SizedBox(height: AppSpacing.md),
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: Form(
+                key: _formKey,
+                child: ListView(
+                  padding: EdgeInsets.all(
+                    isWideScreen ? AppSpacing.lg : AppSpacing.md,
+                  ),
+                  children: [
+                    // Title Field
+                    _buildTitleField(theme, loc),
 
-            // Description Field
-            _buildDescriptionField(theme, loc),
+                    const SizedBox(height: AppSpacing.md),
 
-            const SizedBox(height: AppSpacing.lg),
+                    // Description Field
+                    _buildDescriptionField(theme, loc),
 
-            // Category Selector
-            _buildCategorySelector(theme, loc),
+                    const SizedBox(height: AppSpacing.lg),
 
-            const SizedBox(height: AppSpacing.lg),
+                    // Category Selector
+                    _buildCategorySelector(theme, loc),
 
-            // Due Date Picker
-            _buildDueDatePicker(theme, loc),
+                    const SizedBox(height: AppSpacing.lg),
 
-            const SizedBox(height: AppSpacing.xl),
+                    // Due Date Picker
+                    _buildDueDatePicker(theme, loc),
 
-            // Save Button
-            _buildSaveButton(theme, loc),
-          ],
-        ),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    // Reminder Toggle
+                    _buildReminderSection(theme, loc),
+
+                    const SizedBox(height: AppSpacing.xl),
+
+                    // Save Button
+                    _buildSaveButton(theme, loc),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -345,8 +368,166 @@ class _AddEditTaskScreenState extends State<AddEditTaskScreen> {
     if (picked != null) {
       setState(() {
         _dueDate = picked;
+        // Default reminder to due date at 9 AM if not set
+        if (_hasReminder && _remindAt == null) {
+          _remindAt = DateTime(picked.year, picked.month, picked.day, 9, 0);
+        }
       });
     }
+  }
+
+  Future<void> _pickReminderTime() async {
+    final initialTime = _remindAt != null
+        ? TimeOfDay.fromDateTime(_remindAt!)
+        : const TimeOfDay(hour: 9, minute: 0);
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+    );
+
+    if (picked != null && _dueDate != null) {
+      setState(() {
+        _remindAt = DateTime(
+          _dueDate!.year,
+          _dueDate!.month,
+          _dueDate!.day,
+          picked.hour,
+          picked.minute,
+        );
+      });
+    }
+  }
+
+  Widget _buildReminderSection(ThemeData theme, AppLocalizations loc) {
+    final canSetReminder = _dueDate != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(loc.get('reminder'), style: theme.textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: _hasReminder
+                ? theme.colorScheme.primaryContainer.withAlpha(30)
+                : theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(
+              color: _hasReminder
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline,
+            ),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.notifications_outlined,
+                    size: 20,
+                    color: _hasReminder
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      _hasReminder
+                          ? loc.get('reminder_on')
+                          : loc.get('no_reminder'),
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: _hasReminder
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  Switch(
+                    value: _hasReminder,
+                    onChanged: canSetReminder
+                        ? (value) {
+                            setState(() {
+                              _hasReminder = value;
+                              if (value &&
+                                  _dueDate != null &&
+                                  _remindAt == null) {
+                                // Default to 9 AM on due date
+                                _remindAt = DateTime(
+                                  _dueDate!.year,
+                                  _dueDate!.month,
+                                  _dueDate!.day,
+                                  9,
+                                  0,
+                                );
+                              }
+                            });
+                          }
+                        : null,
+                  ),
+                ],
+              ),
+              if (!canSetReminder)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.sm),
+                  child: Text(
+                    loc.get('set_due_date_first'),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              if (_hasReminder && _remindAt != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.md),
+                  child: InkWell(
+                    onTap: _pickReminderTime,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.sm,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        border: Border.all(color: theme.colorScheme.outline),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            size: 18,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Text(
+                            DateFormat.jm(
+                              loc.locale.languageCode,
+                            ).format(_remindAt!),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Icon(
+                            Icons.edit,
+                            size: 14,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _saveTask() async {
@@ -383,6 +564,8 @@ class _AddEditTaskScreenState extends State<AddEditTaskScreen> {
         createdAt: isEditing ? _existingTask!.createdAt : DateTime.now(),
         completedAt: isEditing ? _existingTask!.completedAt : null,
         dueDate: _dueDate,
+        remindAt: _hasReminder ? _remindAt : null,
+        hasReminder: _hasReminder,
       );
 
       bool success;
@@ -399,6 +582,15 @@ class _AddEditTaskScreenState extends State<AddEditTaskScreen> {
         });
 
         if (success) {
+          // Schedule or cancel notification
+          if (task.hasReminder && task.remindAt != null) {
+            await NotificationService.instance.scheduleTaskReminder(task);
+          } else {
+            await NotificationService.instance.cancelTaskReminder(task.id);
+          }
+
+          if (!mounted) return;
+
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

@@ -1,29 +1,29 @@
-import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 import 'task_model.dart';
-import '../app_theme.dart';
+import '../database/database_helper.dart';
 
-/// Repository for Task data access using Hive
+/// Repository for Task data access using SQLite
 ///
-/// This class provides an abstraction layer over Hive storage,
-/// making it easy to switch to SQLite or other storage solutions later.
+/// This class provides an abstraction layer over SQLite storage,
+/// using the DatabaseHelper singleton for all database operations.
 /// All data access goes through this repository following the
 /// Repository Pattern for clean architecture.
 class TaskRepository {
-  late Box<Task> _taskBox;
+  final DatabaseHelper _db = DatabaseHelper.instance;
   final Uuid _uuid = const Uuid();
 
   /// Initialize the task repository
-  /// Opens the Hive box for tasks
+  /// Opens/initializes the SQLite database
   Future<void> init() async {
-    _taskBox = await Hive.openBox<Task>(DatabaseConstants.tasksBox);
+    // Trigger database initialization by accessing it
+    await _db.database;
   }
 
   /// Get all tasks from storage
   /// Returns a list of all tasks, or empty list if none exist
   Future<List<Task>> getAllTasks() async {
     try {
-      return _taskBox.values.toList();
+      return await _db.getTasks();
     } catch (e) {
       throw Exception('Failed to load tasks: $e');
     }
@@ -35,9 +35,7 @@ class TaskRepository {
   /// Returns list of tasks belonging to specified category
   Future<List<Task>> getTasksByCategory(String categoryId) async {
     try {
-      return _taskBox.values
-          .where((task) => task.categoryId == categoryId)
-          .toList();
+      return await _db.getTasksByCategory(categoryId);
     } catch (e) {
       throw Exception('Failed to load tasks for category: $e');
     }
@@ -53,13 +51,7 @@ class TaskRepository {
     DateTime endDate,
   ) async {
     try {
-      return _taskBox.values
-          .where(
-            (task) =>
-                task.createdAt.isAfter(startDate) &&
-                task.createdAt.isBefore(endDate),
-          )
-          .toList();
+      return await _db.getTasksByDateRange(startDate, endDate);
     } catch (e) {
       throw Exception('Failed to load tasks by date range: $e');
     }
@@ -75,15 +67,7 @@ class TaskRepository {
     DateTime endDate,
   ) async {
     try {
-      return _taskBox.values
-          .where(
-            (task) =>
-                task.isCompleted &&
-                task.completedAt != null &&
-                task.completedAt!.isAfter(startDate) &&
-                task.completedAt!.isBefore(endDate),
-          )
-          .toList();
+      return await _db.getCompletedTasksByDateRange(startDate, endDate);
     } catch (e) {
       throw Exception('Failed to load completed tasks by date range: $e');
     }
@@ -98,7 +82,7 @@ class TaskRepository {
       // Generate ID if not provided
       final taskWithId = task.id.isEmpty ? task.copyWith(id: _uuid.v4()) : task;
 
-      await _taskBox.put(taskWithId.id, taskWithId);
+      await _db.insertTask(taskWithId);
       return taskWithId;
     } catch (e) {
       throw Exception('Failed to add task: $e');
@@ -111,11 +95,12 @@ class TaskRepository {
   /// Returns the updated task
   Future<Task> updateTask(Task task) async {
     try {
-      if (!_taskBox.containsKey(task.id)) {
+      final exists = await _db.taskExists(task.id);
+      if (!exists) {
         throw Exception('Task with ID ${task.id} not found');
       }
 
-      await _taskBox.put(task.id, task);
+      await _db.updateTask(task);
       return task;
     } catch (e) {
       throw Exception('Failed to update task: $e');
@@ -127,11 +112,12 @@ class TaskRepository {
   /// [id] - The ID of the task to delete
   Future<void> deleteTask(String id) async {
     try {
-      if (!_taskBox.containsKey(id)) {
+      final exists = await _db.taskExists(id);
+      if (!exists) {
         throw Exception('Task with ID $id not found');
       }
 
-      await _taskBox.delete(id);
+      await _db.deleteTask(id);
     } catch (e) {
       throw Exception('Failed to delete task: $e');
     }
@@ -143,7 +129,7 @@ class TaskRepository {
   /// Returns the updated task
   Future<Task> toggleTaskCompletion(String id) async {
     try {
-      final task = _taskBox.get(id);
+      final task = await _db.getTaskById(id);
       if (task == null) {
         throw Exception('Task with ID $id not found');
       }
@@ -154,7 +140,7 @@ class TaskRepository {
         clearCompletedAt: task.isCompleted,
       );
 
-      await _taskBox.put(id, updatedTask);
+      await _db.updateTask(updatedTask);
       return updatedTask;
     } catch (e) {
       throw Exception('Failed to toggle task completion: $e');
@@ -164,7 +150,7 @@ class TaskRepository {
   /// Get count of pending tasks
   Future<int> getPendingTaskCount() async {
     try {
-      return _taskBox.values.where((task) => !task.isCompleted).length;
+      return await _db.getPendingTaskCount();
     } catch (e) {
       throw Exception('Failed to get pending task count: $e');
     }
@@ -173,7 +159,7 @@ class TaskRepository {
   /// Get count of completed tasks
   Future<int> getCompletedTaskCount() async {
     try {
-      return _taskBox.values.where((task) => task.isCompleted).length;
+      return await _db.getCompletedTaskCount();
     } catch (e) {
       throw Exception('Failed to get completed task count: $e');
     }
@@ -182,7 +168,7 @@ class TaskRepository {
   /// Delete all tasks (use with caution)
   Future<void> deleteAllTasks() async {
     try {
-      await _taskBox.clear();
+      await _db.deleteAllTasks();
     } catch (e) {
       throw Exception('Failed to delete all tasks: $e');
     }
@@ -190,6 +176,6 @@ class TaskRepository {
 
   /// Close the repository and release resources
   Future<void> close() async {
-    await _taskBox.close();
+    await _db.close();
   }
 }
